@@ -1,6 +1,7 @@
 /**
  * Staff Page - Customer service interface
  * Responsive design: PC shows sidebar, Mobile uses floating button
+ * With authentication support
  */
 
 import { useEffect, useState, useCallback } from 'react';
@@ -9,6 +10,8 @@ import { useStaffStore } from '@client/stores/staffStore';
 import { SessionList } from '@client/components/staff/SessionList';
 import { StaffChatWindow } from '@client/components/staff/StaffChatWindow';
 import { QueueList } from '@client/components/staff/QueueList';
+import { useAuth } from '@client/hooks/useAuth';
+import { LoginForm } from '@client/components/staff/LoginForm';
 
 // Check if device is mobile
 const isMobileDevice = (): boolean => {
@@ -28,6 +31,16 @@ const updateUrlSessionId = (sessionId: string | null) => {
 };
 
 export function StaffPage() {
+  // Authentication
+  const {
+    isLoading: authLoading,
+    isAuthenticated,
+    requireAuth,
+    error: authError,
+    remainingAttempts,
+    login,
+  } = useAuth();
+
   const {
     sessions,
     currentSessionId,
@@ -59,6 +72,43 @@ export function StaffPage() {
   const [isMobile, setIsMobile] = useState(false);
   const [showSessionList, setShowSessionList] = useState(false);
   const [showQueueList, setShowQueueList] = useState(false); // 新增：队列弹窗状态
+
+  // Show loading state
+  if (authLoading) {
+    return (
+      <div style={{
+        height: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#f5f5f5',
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div className="animate-spin" style={{
+            width: '40px',
+            height: '40px',
+            border: '3px solid #e5e7eb',
+            borderTopColor: '#3b82f6',
+            borderRadius: '50%',
+            margin: '0 auto 16px',
+          }}></div>
+          <p style={{ color: '#6b7280' }}>加载中...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show login form if authentication is required and not authenticated
+  if (requireAuth && !isAuthenticated) {
+    return (
+      <LoginForm
+        onLogin={login}
+        error={authError}
+        remainingAttempts={remainingAttempts}
+        isLoading={authLoading}
+      />
+    );
+  }
 
   // Detect mobile on mount and resize
   useEffect(() => {

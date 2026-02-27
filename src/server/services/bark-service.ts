@@ -2,6 +2,8 @@
  * Bark Notification Service - Send push notifications to iOS
  */
 
+import { generatePushToken } from '../module-auth/services/auth-service';
+
 // Configuration (can be initialized from Workers env)
 let _barkKey: string | null = null;
 let _barkApi: string = 'https://api.day.app';
@@ -117,8 +119,11 @@ export async function notifyVisitorMessage(
     preview = '[文件]';
   }
 
-  // 客服端链接 - 使用环境变量配置的地址
-  const staffUrl = `${_staffUrlBase}?s=${sessionId}`;
+  // 生成推送 token 用于免密访问
+  const pushToken = await generatePushToken();
+
+  // 客服端链接 - 使用环境变量配置的地址，添加 token 参数
+  const staffUrl = `${_staffUrlBase}?s=${sessionId}&token=${pushToken}`;
 
   await sendBarkNotification(
     `💬 ${visitorName}`,

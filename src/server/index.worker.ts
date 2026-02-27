@@ -10,9 +10,11 @@ import type { D1Database, R2Bucket, Fetcher } from '@cloudflare/workers-types';
 import { apiRoutes } from './module-todos/routes/todos-routes';
 import { chatRoutes } from './module-chat/routes/chat-routes';
 import { staffRoutes } from './module-staff/routes/staff-routes';
+import { authRoutes } from './module-auth/routes/auth-routes';
 import { initializeD1Db } from './shared/db';
 import { initializeR2Storage } from './shared/storage';
 import { initBarkService } from './services/bark-service';
+import { initAuthService } from './module-auth/services/auth-service';
 
 // Cloudflare Workers bindings
 interface Env {
@@ -23,6 +25,10 @@ interface Env {
   BARK_KEY?: string;
   BARK_API?: string;
   STAFF_URL_BASE?: string;
+  // Auth configuration
+  REQUIRE_AUTH?: string;
+  STAFF_PASSWORD?: string;
+  JWT_SECRET?: string;
 }
 
 // MIME types for common file extensions
@@ -75,8 +81,15 @@ async function ensureInitialized(env: Env): Promise<void> {
     STAFF_URL_BASE: env.STAFF_URL_BASE,
   });
 
+  // Initialize Auth service
+  initAuthService({
+    REQUIRE_AUTH: env.REQUIRE_AUTH,
+    STAFF_PASSWORD: env.STAFF_PASSWORD,
+    JWT_SECRET: env.JWT_SECRET,
+  });
+
   initialized = true;
-  console.log('[Worker] Initialized D1 database, R2 storage, and Bark service');
+  console.log('[Worker] Initialized D1 database, R2 storage, Bark service, and Auth service');
 }
 
 // Serve uploaded files from R2
@@ -125,6 +138,7 @@ app.use('*', async (c, next) => {
 app.route('/api', apiRoutes);
 app.route('/api/chat', chatRoutes);
 app.route('/api/staff', staffRoutes);
+app.route('/api/auth', authRoutes);
 
 // Health check
 app.get('/health', (c) => {

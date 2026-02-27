@@ -16,6 +16,8 @@ import { initializeNodeStorage } from './shared/storage';
 import { apiRoutes } from './module-todos/routes/todos-routes';
 import { chatRoutes } from './module-chat/routes/chat-routes';
 import { staffRoutes } from './module-staff/routes/staff-routes';
+import { authRoutes } from './module-auth/routes/auth-routes';
+import { initAuthService } from './module-auth/services/auth-service';
 
 // Get project root directory
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -88,6 +90,7 @@ app.use('*', cors({
 app.route('/api', apiRoutes);
 app.route('/api/chat', chatRoutes);
 app.route('/api/staff', staffRoutes);
+app.route('/api/auth', authRoutes);
 
 // Health check
 app.get('/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOString() }));
@@ -123,6 +126,14 @@ async function start(): Promise<void> {
   console.log('[Node] Initializing storage at:', uploadDir);
   initializeNodeStorage(uploadDir);
   console.log('[Node] Storage initialized');
+
+  // Initialize Auth service from environment variables
+  initAuthService({
+    STAFF_PASSWORD: process.env.STAFF_PASSWORD,
+    REQUIRE_AUTH: process.env.REQUIRE_AUTH,
+    JWT_SECRET: process.env.JWT_SECRET,
+  });
+  console.log('[Node] Auth service initialized');
 
   console.log('[Node] Starting server...');
   serve({
