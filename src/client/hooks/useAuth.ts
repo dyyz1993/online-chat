@@ -3,7 +3,7 @@
  * Manages authentication state and provides login/logout functions
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 const TOKEN_KEY = 'staff_token';
 const TOKEN_EXPIRES_KEY = 'staff_token_expires';
@@ -22,6 +22,54 @@ export interface LoginResult {
   remainingAttempts?: number;
 }
 
+// Helper functions outside the hook (no closure issues)
+function storeTokenHelper(token: string, expiresAt: number) {
+  localStorage.setItem(TOKEN_KEY, token);
+  localStorage.setItem(TOKEN_EXPIRES_KEY, expiresAt.toString());
+}
+
+function clearTokenHelper() {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(TOKEN_EXPIRES_KEY);
+}
+
+function getStoredToken(): { token: string | null; expiresAt: number | null } {
+  const token = localStorage.getItem(TOKEN_KEY);
+  const expiresAt = localStorage.getItem(TOKEN_EXPIRES_KEY);
+  return {
+    token,
+    expiresAt: expiresAt ? parseInt(expiresAt, 10) : null,
+  };
+}
+
+function isTokenExpired(expiresAt: number | null): boolean {
+  return !expiresAt || Date.now() / 1000 > expiresAt;
+}
+
+async function checkAuthRequired(): Promise<boolean> {
+  try {
+    const response = await fetch('/api/auth/check');
+    const data = await response.json();
+    return data.requireAuth === true;
+  } catch {
+    return true; // Default to requiring auth on error
+  }
+}
+
+async function verifyToken(token: string): Promise<boolean> {
+  try {
+    const response = await fetch('/api/auth/verify', {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    const data = await response.json();
+    return data.valid === true;
+  } catch {
+    return false;
+  }
+}
+
 export function useAuth() {
   const [state, setState] = useState<AuthState>({
     isLoading: true,
@@ -31,60 +79,17 @@ export function useAuth() {
     remainingAttempts: null,
   });
 
-  // Check if token is expired
-  const isTokenExpired = useCallback(() => {
-    const expiresAt = localStorage.getItem(TOKEN_EXPIRES_KEY);
-    if (!expiresAt) return true;
-    return Date.now() / 1000 > parseInt(expiresAt, 10);
-  }, []);
+  // Use ref to track if initialized (prevents double init in strict mode)
+  const initRef = useRef(false);
 
-  // Get stored token
-  const getStoredToken = useCallback(() => {
-    const token = localStorage.getItem(TOKEN_KEY);
-    if (!token || isTokenExpired()) {
-      localStorage.removeItem(TOKEN_KEY);
-      localStorage.removeItem(TOKEN_EXPIRES_KEY);
-      return null;
-    }
-    return token;
-  }, [isTokenExpired]);
-
-  // Store token
+  // Store token (for login)
   const storeToken = useCallback((token: string, expiresAt: number) => {
-    localStorage.setItem(TOKEN_KEY, token);
-    localStorage.setItem(TOKEN_EXPIRES_KEY, expiresAt.toString());
+    storeTokenHelper(token, expiresAt);
   }, []);
 
-  // Clear token
+  // Clear token (for logout)
   const clearToken = useCallback(() => {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(TOKEN_EXPIRES_KEY);
-  }, []);
-
-  // Check if authentication is required
-  const checkAuthRequired = useCallback(async (): Promise<boolean> => {
-    try {
-      const response = await fetch('/api/auth/check');
-      const data = await response.json();
-      return data.requireAuth === true;
-    } catch {
-      return true; // Default to requiring auth on error
-    }
-  }, []);
-
-  // Verify token with server
-  const verifyToken = useCallback(async (token: string): Promise<boolean> => {
-    try {
-      const response = await fetch('/api/auth/verify', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const data = await response.json();
-      return data.valid === true;
-    } catch {
-      return false;
-    }
+    clearTokenHelper();
   }, []);
 
   // Login with password
@@ -103,7 +108,7 @@ export function useAuth() {
       const data = await response.json();
 
       if (data.success && data.token) {
-        storeToken(data.token, data.expiresAt);
+        storeTokenHelper(data.token, data.expiresAt);
         setState({
           isLoading: false,
           isAuthenticated: true,
@@ -134,11 +139,11 @@ export function useAuth() {
       }));
       return { success: false, error: errorMessage };
     }
-  }, [storeToken]);
+  }, []);
 
   // Logout
   const logout = useCallback(() => {
-    clearToken();
+    clearTokenHelper();
     setState({
       isLoading: false,
       isAuthenticated: false,
@@ -146,10 +151,14 @@ export function useAuth() {
       error: null,
       remainingAttempts: null,
     });
-  }, [clearToken]);
+  }, []);
 
-  // Initialize auth state
+  // Initialize auth state - runs once
   useEffect(() => {
+    // Prevent double initialization in React strict mode
+    if (initRef.current) return;
+    initRef.current = true;
+
     let mounted = true;
 
     async function initAuth() {
@@ -159,7 +168,7 @@ export function useAuth() {
 
       if (urlToken) {
         // Store token from URL
-        storeToken(urlToken, Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60);
+        storeTokenHelper(urlToken, Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60);
         // Clean URL
         urlParams.delete('token');
         const newUrl = urlParams.toString()
@@ -169,11 +178,15 @@ export function useAuth() {
       }
 
       // Get stored token
-      const token = getStoredToken();
+      const { token, expiresAt } = getStoredToken();
 
-      if (token) {
+      // Check if token is expired
+      const expired = isTokenExpired(expiresAt);
+
+      if (token && !expired) {
         // Verify token with server
         const valid = await verifyToken(token);
+
         if (mounted) {
           if (valid) {
             setState({
@@ -185,7 +198,7 @@ export function useAuth() {
             });
           } else {
             // Token invalid, clear and check if auth required
-            clearToken();
+            clearTokenHelper();
             const requireAuth = await checkAuthRequired();
             setState({
               isLoading: false,
@@ -197,7 +210,10 @@ export function useAuth() {
           }
         }
       } else {
-        // No token, check if auth required
+        // No valid token, check if auth required
+        if (token) {
+          clearTokenHelper();
+        }
         const requireAuth = await checkAuthRequired();
         if (mounted) {
           setState({
@@ -216,11 +232,13 @@ export function useAuth() {
     return () => {
       mounted = false;
     };
-  }, [getStoredToken, verifyToken, checkAuthRequired, clearToken, storeToken]);
+  }, []); // Empty dependency - only run once
 
   return {
     ...state,
     login,
     logout,
+    storeToken,
+    clearToken,
   };
 }

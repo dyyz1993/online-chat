@@ -4,7 +4,7 @@
  * With authentication support
  */
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { MessageCircle, Users } from 'lucide-react';
 import { useStaffStore } from '@client/stores/staffStore';
 import { SessionList } from '@client/components/staff/SessionList';
@@ -71,44 +71,12 @@ export function StaffPage() {
   // UI state for mobile
   const [isMobile, setIsMobile] = useState(false);
   const [showSessionList, setShowSessionList] = useState(false);
-  const [showQueueList, setShowQueueList] = useState(false); // 新增：队列弹窗状态
+  const [showQueueList, setShowQueueList] = useState(false);
 
-  // Show loading state
-  if (authLoading) {
-    return (
-      <div style={{
-        height: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#f5f5f5',
-      }}>
-        <div style={{ textAlign: 'center' }}>
-          <div className="animate-spin" style={{
-            width: '40px',
-            height: '40px',
-            border: '3px solid #e5e7eb',
-            borderTopColor: '#3b82f6',
-            borderRadius: '50%',
-            margin: '0 auto 16px',
-          }}></div>
-          <p style={{ color: '#6b7280' }}>加载中...</p>
-        </div>
-      </div>
-    );
-  }
+  // Ref to prevent multiple initializations
+  const dataLoadedRef = useRef(false);
 
-  // Show login form if authentication is required and not authenticated
-  if (requireAuth && !isAuthenticated) {
-    return (
-      <LoginForm
-        onLogin={login}
-        error={authError}
-        remainingAttempts={remainingAttempts}
-        isLoading={authLoading}
-      />
-    );
-  }
+  // ============ ALL HOOKS MUST BE BEFORE CONDITIONAL RETURNS ============
 
   // Detect mobile on mount and resize
   useEffect(() => {
@@ -120,12 +88,19 @@ export function StaffPage() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Load sessions, connect SSE and check URL params on mount
+  // Load sessions, connect SSE and check URL params only after authentication
   useEffect(() => {
+    // Only load data when authenticated and not already loaded
+    if (!isAuthenticated || dataLoadedRef.current) return;
+
+    // Mark as loaded to prevent re-initialization
+    dataLoadedRef.current = true;
+
+    // Initialize data
     loadSessions();
     connectSSE();
     initFromUrl();
-  }, [loadSessions, connectSSE, initFromUrl]);
+  }, [isAuthenticated, loadSessions, connectSSE, initFromUrl]);
 
   // Get current session info
   const currentSession = sessions.find((s) => s.id === currentSessionId) || null;
@@ -173,7 +148,47 @@ export function StaffPage() {
     setShowSessionList((prev) => !prev);
   };
 
-  // Styles
+  // ============ CONDITIONAL RETURNS AFTER ALL HOOKS ============
+
+  // Show loading state
+  if (authLoading) {
+    return (
+      <div style={{
+        height: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#f5f5f5',
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div className="animate-spin" style={{
+            width: '40px',
+            height: '40px',
+            border: '3px solid #e5e7eb',
+            borderTopColor: '#3b82f6',
+            borderRadius: '50%',
+            margin: '0 auto 16px',
+          }}></div>
+          <p style={{ color: '#6b7280' }}>加载中...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show login form if authentication is required and not authenticated
+  if (requireAuth && !isAuthenticated) {
+    return (
+      <LoginForm
+        onLogin={login}
+        error={authError}
+        remainingAttempts={remainingAttempts}
+        isLoading={authLoading}
+      />
+    );
+  }
+
+  // ============ STYLES (only used when authenticated) ============
+
   const pageStyle: React.CSSProperties = {
     height: '100%',
     display: 'flex',
@@ -261,7 +276,6 @@ export function StaffPage() {
     gap: '12px',
   };
 
-  // Floating button for mobile
   const floatingButtonStyle: React.CSSProperties = {
     position: 'fixed',
     left: '16px',
@@ -282,7 +296,6 @@ export function StaffPage() {
     transition: 'transform 0.2s ease',
   };
 
-  // Overlay for mobile
   const overlayStyle: React.CSSProperties = {
     position: 'absolute',
     inset: 0,
@@ -290,6 +303,8 @@ export function StaffPage() {
     zIndex: 50,
     display: showSessionList ? 'block' : 'none',
   };
+
+  // ============ MAIN RENDER ============
 
   return (
     <div style={pageStyle}>

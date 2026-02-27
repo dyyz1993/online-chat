@@ -25,6 +25,13 @@ export function MessageList({
   const scrollHeightRef = useRef(0);
   const prevMessagesLengthRef = useRef(0);
   const shouldScrollToBottomRef = useRef(true);
+  const lastMessageIdRef = useRef<number | string | null>(null);
+  const isOwnRef = useRef(isOwn);
+
+  // Keep isOwn ref updated
+  useEffect(() => {
+    isOwnRef.current = isOwn;
+  }, [isOwn]);
 
   // Scroll to bottom with smooth animation
   const scrollToBottom = useCallback((smooth = true) => {
@@ -43,19 +50,37 @@ export function MessageList({
     return scrollHeight - scrollTop - clientHeight < 100;
   }, []);
 
-  // Scroll to bottom on new message (only if user was at bottom)
+  // Scroll to bottom on new message
   useEffect(() => {
     const currentLength = messages.length;
     const prevLength = prevMessagesLengthRef.current;
 
-    // Only scroll if new message added (not loading history)
-    if (currentLength > prevLength && shouldScrollToBottomRef.current) {
-      // Small delay to ensure DOM is updated
-      setTimeout(() => scrollToBottom(), 50);
+    if (currentLength === 0) {
+      prevMessagesLengthRef.current = currentLength;
+      return;
+    }
+
+    // Get the last message
+    const lastMessage = messages[messages.length - 1];
+    const lastMessageId = lastMessage?.id;
+    const prevLastMessageId = lastMessageIdRef.current;
+
+    // Check if this is a new message (different from previous last message)
+    const isNewMessage = currentLength > prevLength || lastMessageId !== prevLastMessageId;
+
+    if (isNewMessage) {
+      // If the new message is from the user (own message), always scroll to bottom
+      // Or if user was already near bottom, scroll to bottom
+      const isOwnMessage = isOwnRef.current(lastMessage);
+      if (isOwnMessage || shouldScrollToBottomRef.current) {
+        // Small delay to ensure DOM is updated
+        setTimeout(() => scrollToBottom(), 50);
+      }
+      lastMessageIdRef.current = lastMessageId;
     }
 
     prevMessagesLengthRef.current = currentLength;
-  }, [messages.length, scrollToBottom]);
+  }, [messages, scrollToBottom]);
 
   // Handle scroll to load more and track scroll position
   const handleScroll = () => {

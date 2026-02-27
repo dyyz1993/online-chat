@@ -23,100 +23,178 @@ export function LoginForm({ onLogin, error, remainingAttempts, isLoading }: Logi
     }
   };
 
+  const containerStyle: React.CSSProperties = {
+    minHeight: '100vh',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    padding: '20px',
+  };
+
+  const cardStyle: React.CSSProperties = {
+    backgroundColor: '#fff',
+    borderRadius: '16px',
+    boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15)',
+    padding: '40px',
+    width: '100%',
+    maxWidth: '400px',
+  };
+
+  const titleStyle: React.CSSProperties = {
+    fontSize: '28px',
+    fontWeight: 700,
+    color: '#1a1a2e',
+    textAlign: 'center',
+    marginBottom: '8px',
+  };
+
+  const subtitleStyle: React.CSSProperties = {
+    fontSize: '14px',
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: '32px',
+  };
+
+  const inputContainerStyle: React.CSSProperties = {
+    marginBottom: '24px',
+  };
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    padding: '14px 16px',
+    fontSize: '16px',
+    border: '2px solid #e1e1e1',
+    borderRadius: '10px',
+    outline: 'none',
+    transition: 'border-color 0.2s, box-shadow 0.2s',
+    boxSizing: 'border-box',
+  };
+
+  const buttonStyle: React.CSSProperties = {
+    width: '100%',
+    padding: '14px',
+    fontSize: '16px',
+    fontWeight: 600,
+    color: '#fff',
+    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    border: 'none',
+    borderRadius: '10px',
+    cursor: isLoading || remainingAttempts === 0 ? 'not-allowed' : 'pointer',
+    opacity: isLoading || remainingAttempts === 0 ? 0.6 : 1,
+    transition: 'transform 0.2s, box-shadow 0.2s',
+  };
+
+  const errorStyle: React.CSSProperties = {
+    backgroundColor: '#fef2f2',
+    border: '1px solid #fecaca',
+    borderRadius: '8px',
+    padding: '12px 16px',
+    marginBottom: '20px',
+    color: '#dc2626',
+    fontSize: '14px',
+  };
+
+  const warningStyle: React.CSSProperties = {
+    backgroundColor: '#fffbeb',
+    border: '1px solid #fde68a',
+    borderRadius: '8px',
+    padding: '12px 16px',
+    marginBottom: '20px',
+    color: '#d97706',
+    fontSize: '14px',
+  };
+
+  const remainingStyle: React.CSSProperties = {
+    marginTop: '8px',
+    fontSize: '13px',
+    color: '#ef4444',
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            客服后台登录
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            请输入密码访问客服工作台
-          </p>
-        </div>
+    <div style={containerStyle}>
+      <div style={cardStyle}>
+        <h1 style={titleStyle}>🔐 客服后台</h1>
+        <p style={subtitleStyle}>请输入密码访问客服工作台</p>
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div>
-            <label htmlFor="password" className="sr-only">
-              密码
-            </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              className="appearance-none rounded relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 text-lg"
-              placeholder="请输入密码"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              disabled={isLoading}
-            />
-          </div>
-
+        <form onSubmit={handleSubmit}>
           {error && (
-            <div className="rounded-md bg-red-50 p-4">
-              <div className="flex">
-                <div className="ml-3">
-                  <h3 className="text-sm font-medium text-red-800">{error}</h3>
-                  {remainingAttempts !== null && remainingAttempts > 0 && (
-                    <p className="mt-1 text-sm text-red-700">
-                      剩余尝试次数: {remainingAttempts}
-                    </p>
-                  )}
+            <div style={errorStyle}>
+              <div>{error}</div>
+              {remainingAttempts !== null && remainingAttempts > 0 && (
+                <div style={remainingStyle}>
+                  剩余尝试次数: {remainingAttempts}
                 </div>
-              </div>
+              )}
             </div>
           )}
 
           {remainingAttempts === 0 && (
-            <div className="rounded-md bg-yellow-50 p-4">
-              <div className="flex">
-                <div className="ml-3">
-                  <p className="text-sm text-yellow-700">
-                    尝试次数过多，请 10 分钟后重试
-                  </p>
-                </div>
-              </div>
+            <div style={warningStyle}>
+              尝试次数过多，请 10 分钟后重试
             </div>
           )}
 
-          <div>
-            <button
-              type="submit"
-              disabled={isLoading || remainingAttempts === 0}
-              className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
-            >
-              {isLoading ? (
-                <span className="flex items-center">
-                  <svg
-                    className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    ></circle>
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    ></path>
-                  </svg>
-                  登录中...
-                </span>
-              ) : (
-                '登录'
-              )}
-            </button>
+          <div style={inputContainerStyle}>
+            <input
+              type="password"
+              placeholder="请输入密码"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={isLoading}
+              style={inputStyle}
+              autoFocus
+            />
           </div>
+
+          <button
+            type="submit"
+            disabled={isLoading || remainingAttempts === 0}
+            style={buttonStyle}
+          >
+            {isLoading ? (
+              <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                <svg
+                  style={{ animation: 'spin 1s linear infinite', width: '20px', height: '20px' }}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                >
+                  <circle
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                    strokeLinecap="round"
+                    strokeDasharray="31.4 31.4"
+                    strokeDashoffset="0"
+                  />
+                </svg>
+                登录中...
+              </span>
+            ) : (
+              '登录'
+            )}
+          </button>
         </form>
+
+        <style>{`
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+          input:focus {
+            border-color: #667eea !important;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2) !important;
+          }
+          button:not(:disabled):hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+          }
+          button:not(:disabled):active {
+            transform: translateY(0);
+          }
+        `}</style>
       </div>
     </div>
   );

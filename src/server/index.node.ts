@@ -11,6 +11,7 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
+import { config } from 'dotenv';
 import { initializeNodeDb } from './shared/db';
 import { initializeNodeStorage } from './shared/storage';
 import { apiRoutes } from './module-todos/routes/todos-routes';
@@ -19,9 +20,12 @@ import { staffRoutes } from './module-staff/routes/staff-routes';
 import { authRoutes } from './module-auth/routes/auth-routes';
 import { initAuthService } from './module-auth/services/auth-service';
 
-// Get project root directory
+// Load environment variables from .env.local, .env
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const projectRoot = join(__dirname, '..', '..');
+config({ path: join(projectRoot, '.env.local') });
+config({ path: join(projectRoot, '.env') });
+
 const distDir = join(projectRoot, 'dist');
 const uploadDir = join(projectRoot, 'data', 'uploads');
 const port = parseInt(process.env.PORT || '3010', 10);
