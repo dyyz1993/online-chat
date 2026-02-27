@@ -3,7 +3,23 @@
  * Supports both Node.js filesystem and Cloudflare R2
  */
 
+import { createRequire } from 'node:module';
 import type { R2Bucket } from '@cloudflare/workers-types';
+
+// Lazy-loaded require - only created when needed in Node.js environment
+let _nodeRequire: typeof require | null = null;
+
+function getNodeRequire(): typeof require {
+  if (!_nodeRequire) {
+    // Check if we're in a Node.js environment with valid import.meta.url
+    if (typeof import.meta.url === 'string' && import.meta.url.startsWith('file://')) {
+      _nodeRequire = createRequire(import.meta.url);
+    } else {
+      throw new Error('Node.js require not available in this environment');
+    }
+  }
+  return _nodeRequire;
+}
 
 // Storage interface for abstraction
 export interface Storage {
@@ -51,30 +67,30 @@ class R2StorageAdapter implements Storage {
 // Node.js Filesystem implementation
 class NodeFileSystemAdapter implements Storage {
   private uploadDir: string;
-  private nodeRequire: typeof require;
 
   constructor(uploadDir: string = './data/uploads') {
-    // Dynamic require for Node.js - only runs in Node.js environment
-    // Using eval('require') to avoid bundler issues
-    this.nodeRequire = eval('require');
     this.uploadDir = uploadDir;
     this.ensureDir();
   }
 
   private ensureDir(): void {
-    const { existsSync, mkdirSync } = this.nodeRequire('node:fs');
+    // Only executed in Node.js environment
+    const nodeRequire = getNodeRequire();
+    const { existsSync, mkdirSync } = nodeRequire('node:fs');
     if (!existsSync(this.uploadDir)) {
       mkdirSync(this.uploadDir, { recursive: true });
     }
   }
 
   private getFilePath(key: string): string {
-    const { join } = this.nodeRequire('node:path');
+    const nodeRequire = getNodeRequire();
+    const { join } = nodeRequire('node:path');
     return join(this.uploadDir, key);
   }
 
   async put(key: string, data: Uint8Array | ArrayBuffer): Promise<void> {
-    const { writeFileSync } = this.nodeRequire('node:fs');
+    const nodeRequire = getNodeRequire();
+    const { writeFileSync } = nodeRequire('node:fs');
     const filepath = this.getFilePath(key);
 
     // Convert to Buffer for Node.js fs
@@ -85,7 +101,8 @@ class NodeFileSystemAdapter implements Storage {
   }
 
   async get(key: string): Promise<Uint8Array | null> {
-    const { existsSync, readFileSync } = this.nodeRequire('node:fs');
+    const nodeRequire = getNodeRequire();
+    const { existsSync, readFileSync } = nodeRequire('node:fs');
     const filepath = this.getFilePath(key);
     if (!existsSync(filepath)) return null;
     const buffer = readFileSync(filepath);
@@ -93,7 +110,8 @@ class NodeFileSystemAdapter implements Storage {
   }
 
   async delete(key: string): Promise<boolean> {
-    const { existsSync, unlinkSync } = this.nodeRequire('node:fs');
+    const nodeRequire = getNodeRequire();
+    const { existsSync, unlinkSync } = nodeRequire('node:fs');
     const filepath = this.getFilePath(key);
     if (existsSync(filepath)) {
       unlinkSync(filepath);
@@ -103,7 +121,8 @@ class NodeFileSystemAdapter implements Storage {
   }
 
   async exists(key: string): Promise<boolean> {
-    const { existsSync } = this.nodeRequire('node:fs');
+    const nodeRequire = getNodeRequire();
+    const { existsSync } = nodeRequire('node:fs');
     const filepath = this.getFilePath(key);
     return existsSync(filepath);
   }
