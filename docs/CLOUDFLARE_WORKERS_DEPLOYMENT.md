@@ -385,22 +385,39 @@ class R2StorageAdapter implements Storage {
 
 ```typescript
 import { createRequire } from 'node:module';
-const require = createRequire(import.meta.url);
+
+// 懒加载 require - 只在 Node.js 环境中创建
+let _nodeRequire: typeof require | null = null;
+
+function getNodeRequire(): typeof require {
+  if (!_nodeRequire) {
+    // 检查是否在 Node.js 环境且 import.meta.url 有效
+    if (typeof import.meta.url === 'string' && import.meta.url.startsWith('file://')) {
+      _nodeRequire = createRequire(import.meta.url);
+    } else {
+      throw new Error('Node.js require not available in this environment');
+    }
+  }
+  return _nodeRequire;
+}
 
 class NodeFileSystemAdapter implements Storage {
   private uploadDir: string;
 
   constructor(uploadDir: string = './data/uploads') {
     this.uploadDir = uploadDir;
-    const { existsSync, mkdirSync } = require('node:fs');
+    // 只在 Node.js 环境中执行
+    const nodeRequire = getNodeRequire();
+    const { existsSync, mkdirSync } = nodeRequire('node:fs');
     if (!existsSync(uploadDir)) {
       mkdirSync(uploadDir, { recursive: true });
     }
   }
 
   async put(key: string, data: Uint8Array | ArrayBuffer): Promise<void> {
-    const { writeFileSync } = require('node:fs');
-    const { join } = require('node:path');
+    const nodeRequire = getNodeRequire();
+    const { writeFileSync } = nodeRequire('node:fs');
+    const { join } = nodeRequire('node:path');
 
     // 关键：Node.js 需要 Buffer
     const buffer = data instanceof Uint8Array
@@ -411,8 +428,9 @@ class NodeFileSystemAdapter implements Storage {
   }
 
   async get(key: string): Promise<Uint8Array | null> {
-    const { existsSync, readFileSync } = require('node:fs');
-    const { join } = require('node:path');
+    const nodeRequire = getNodeRequire();
+    const { existsSync, readFileSync } = nodeRequire('node:fs');
+    const { join } = nodeRequire('node:path');
 
     const filepath = join(this.uploadDir, key);
     if (!existsSync(filepath)) return null;
@@ -424,6 +442,11 @@ class NodeFileSystemAdapter implements Storage {
   // ... 其他方法
 }
 ```
+
+**关键点**：
+- 使用懒加载方式创建 `require`，只在适配器实例化时才调用
+- 检查 `import.meta.url` 有效性，确保只在 Node.js 环境中执行
+- Workers 环境不会实例化 Node.js 适配器，所以 `createRequire` 不会被调用
 
 ---
 
@@ -729,6 +752,52 @@ CREATE TABLE IF NOT EXISTS users (
 -- ❌ D1 不支持某些 SQLite 扩展
 -- CREATE TABLE users (...); -- 缺少 IF NOT EXISTS
 ```
+
+### Q7: `createRequire(import.meta.url)` 报错
+
+**原因**：在 Cloudflare Workers 中 `import.meta.url` 返回 `undefined`
+
+**错误信息**：
+```
+TypeError: The argument 'path' must be a file URL object...
+Received 'undefined'
+```
+
+**解决**：使用懒加载方式，只在 Node.js 适配器实例化时才创建 require
+
+```typescript
+// ❌ 错误 - 模块顶层直接调用
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url); // Workers 中会报错
+
+// ✅ 正确 - 懒加载方式
+let _nodeRequire: typeof require | null = null;
+
+function getNodeRequire(): typeof require {
+  if (!_nodeRequire) {
+    if (typeof import.meta.url === 'string' && import.meta.url.startsWith('file://')) {
+      _nodeRequire = createRequire(import.meta.url);
+    } else {
+      throw new Error('Node.js require not available');
+    }
+  }
+  return _nodeRequire;
+}
+
+// 在 Node.js 适配器中使用
+class NodeSQLiteAdapter {
+  constructor() {
+    const nodeRequire = getNodeRequire(); // 只在实例化时调用
+    const { DatabaseSync } = nodeRequire('node:sqlite');
+    // ...
+  }
+}
+```
+
+**原理**：
+- Workers 调用 `initializeD1Db()` 和 `initializeR2Storage()`
+- 这些函数不会实例化 Node.js 适配器
+- 所以 `getNodeRequire()` 永远不会在 Workers 中执行
 
 ---
 
