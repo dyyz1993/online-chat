@@ -13,6 +13,28 @@
 - **响应式设计** - PC/移动端自适应
 - **Cloudflare Workers** - 支持边缘部署，全球加速
 
+## 界面预览
+
+### 用户端
+
+**PC 端聊天界面：**
+
+![用户端 - PC](./docs/screenshots/chat-pc-conversation.png)
+
+**移动端聊天界面：**
+
+![用户端 - 移动端](./docs/screenshots/chat-h5-conversation.png)
+
+### 客服端
+
+**PC 端工作台：**
+
+![客服端 - PC](./docs/screenshots/staff-pc-overview.png)
+
+**移动端工作台：**
+
+![客服端 - 移动端](./docs/screenshots/staff-h5-overview.png)
+
 ## 技术栈
 
 | 类别 | 技术 |
