@@ -28,7 +28,3 @@ jobs:
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          secrets: |
-            BARK_KEY
-        env:
-          BARK_KEY: ${{ secrets.BARK_KEY }}
