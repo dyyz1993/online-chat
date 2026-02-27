@@ -3,7 +3,10 @@
  * Supports both Node.js filesystem and Cloudflare R2
  */
 
+import { createRequire } from 'node:module';
 import type { R2Bucket } from '@cloudflare/workers-types';
+
+const require = createRequire(import.meta.url);
 
 // Storage interface for abstraction
 export interface Storage {

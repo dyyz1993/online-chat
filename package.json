@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "build:worker": "vite build",
+    "start": "node --import tsx/esm src/server/index.node.ts",
     "deploy": "wrangler deploy",
     "deploy:prod": "wrangler deploy --env production",
     "preview": "vite preview",
@@ -26,6 +27,7 @@
   },
   "dependencies": {
     "@cloudflare/kv-asset-handler": "^0.4.2",
+    "@hono/node-server": "^1.19.9",
     "@hono/zod-openapi": "^1.2.0",
     "@hono/zod-validator": "^0.7.6",
     "hono": "^4.6.16",

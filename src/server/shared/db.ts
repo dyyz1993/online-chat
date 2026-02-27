@@ -3,7 +3,10 @@
  * Supports both Node.js sqlite and Cloudflare D1
  */
 
+import { createRequire } from 'node:module';
 import type { D1Database } from '@cloudflare/workers-types';
+
+const require = createRequire(import.meta.url);
 
 // Database interface for abstraction
 export interface Database {
