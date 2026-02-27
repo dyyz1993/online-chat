@@ -3,10 +3,7 @@
  * Supports both Node.js filesystem and Cloudflare R2
  */
 
-import { createRequire } from 'node:module';
 import type { R2Bucket } from '@cloudflare/workers-types';
-
-const require = createRequire(import.meta.url);
 
 // Storage interface for abstraction
 export interface Storage {
@@ -54,26 +51,30 @@ class R2StorageAdapter implements Storage {
 // Node.js Filesystem implementation
 class NodeFileSystemAdapter implements Storage {
   private uploadDir: string;
+  private nodeRequire: typeof require;
 
   constructor(uploadDir: string = './data/uploads') {
+    // Dynamic require for Node.js - only runs in Node.js environment
+    // Using eval('require') to avoid bundler issues
+    this.nodeRequire = eval('require');
     this.uploadDir = uploadDir;
     this.ensureDir();
   }
 
   private ensureDir(): void {
-    const { existsSync, mkdirSync } = require('node:fs');
+    const { existsSync, mkdirSync } = this.nodeRequire('node:fs');
     if (!existsSync(this.uploadDir)) {
       mkdirSync(this.uploadDir, { recursive: true });
     }
   }
 
   private getFilePath(key: string): string {
-    const { join } = require('node:path');
+    const { join } = this.nodeRequire('node:path');
     return join(this.uploadDir, key);
   }
 
   async put(key: string, data: Uint8Array | ArrayBuffer): Promise<void> {
-    const { writeFileSync } = require('node:fs');
+    const { writeFileSync } = this.nodeRequire('node:fs');
     const filepath = this.getFilePath(key);
 
     // Convert to Buffer for Node.js fs
@@ -84,7 +85,7 @@ class NodeFileSystemAdapter implements Storage {
   }
 
   async get(key: string): Promise<Uint8Array | null> {
-    const { existsSync, readFileSync } = require('node:fs');
+    const { existsSync, readFileSync } = this.nodeRequire('node:fs');
     const filepath = this.getFilePath(key);
     if (!existsSync(filepath)) return null;
     const buffer = readFileSync(filepath);
@@ -92,7 +93,7 @@ class NodeFileSystemAdapter implements Storage {
   }
 
   async delete(key: string): Promise<boolean> {
-    const { existsSync, unlinkSync } = require('node:fs');
+    const { existsSync, unlinkSync } = this.nodeRequire('node:fs');
     const filepath = this.getFilePath(key);
     if (existsSync(filepath)) {
       unlinkSync(filepath);
@@ -102,7 +103,7 @@ class NodeFileSystemAdapter implements Storage {
   }
 
   async exists(key: string): Promise<boolean> {
-    const { existsSync } = require('node:fs');
+    const { existsSync } = this.nodeRequire('node:fs');
     const filepath = this.getFilePath(key);
     return existsSync(filepath);
   }

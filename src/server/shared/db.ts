@@ -3,10 +3,7 @@
  * Supports both Node.js sqlite and Cloudflare D1
  */
 
-import { createRequire } from 'node:module';
 import type { D1Database } from '@cloudflare/workers-types';
-
-const require = createRequire(import.meta.url);
 
 // Database interface for abstraction
 export interface Database {
@@ -48,9 +45,12 @@ class NodeSQLiteAdapter implements Database {
   private db: import('node:sqlite').DatabaseSync;
 
   constructor() {
-    const { DatabaseSync } = require('node:sqlite');
-    const { existsSync, mkdirSync } = require('node:fs');
-    const { dirname } = require('node:path');
+    // Dynamic import for Node.js modules - only runs in Node.js environment
+    // Using eval('require') to avoid bundler issues
+    const nodeRequire = eval('require');
+    const { DatabaseSync } = nodeRequire('node:sqlite');
+    const { existsSync, mkdirSync } = nodeRequire('node:fs');
+    const { dirname } = nodeRequire('node:path');
 
     const dbPath = './data/todos.db';
     const dbDir = dirname(dbPath);
