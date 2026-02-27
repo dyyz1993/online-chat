@@ -13,8 +13,6 @@ BARK_API = "https://api.day.app"
 STAFF_URL_BASE = "https://online-chat.dyyz1993.workers.dev/staff"
 # Auth: Cloudflare Workers deployment does not require password (public demo)
 REQUIRE_AUTH = "false"
-# Auth: Cloudflare Workers deployment does not require password (public demo)
-REQUIRE_AUTH = "false"
 
 [[d1_databases]]
 binding = "DB"
