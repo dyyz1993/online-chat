@@ -2,8 +2,7 @@
  * File upload service - handles image and video uploads
  */
 
-import { existsSync, mkdirSync, writeFileSync, unlinkSync } from 'node:fs';
-import { join, extname } from 'node:path';
+import { extname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import {
   MAX_IMAGE_SIZE,
@@ -13,14 +12,8 @@ import {
   ALLOWED_VIDEO_TYPES,
   ALLOWED_FILE_TYPES,
 } from '@shared/schemas';
+import { getStorage } from '@server/shared/storage';
 import type { UploadResponse, ContentType } from '@shared/types';
-
-const UPLOAD_DIR = './data/uploads';
-
-// Ensure upload directory exists
-if (!existsSync(UPLOAD_DIR)) {
-  mkdirSync(UPLOAD_DIR, { recursive: true });
-}
 
 /**
  * Generate unique filename
@@ -36,7 +29,7 @@ function generateFilename(originalName: string): string {
 function isAllowedFileExtension(filename: string): boolean {
   const ext = extname(filename).toLowerCase();
   const allowedExtensions = [
-    '.csv', '.zip', '.ipa', '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.apk', '.dmg'
+    '.txt', '.csv', '.zip', '.ipa', '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.apk', '.dmg'
   ];
   return allowedExtensions.includes(ext);
 }
@@ -70,7 +63,7 @@ function detectContentType(mimeType: string, filename?: string): ContentType | n
  */
 export function validateFile(
   file: { type: string; size: number; name: string },
-  contentType?: 'image' | 'video' | 'file'
+  _contentType?: 'image' | 'video' | 'file'
 ): { valid: boolean; error?: string; detectedType?: ContentType } {
   // Auto-detect content type if not specified
   const detectedType = detectContentType(file.type, file.name);
@@ -105,48 +98,59 @@ export function validateFile(
 }
 
 /**
- * Save file to disk (used in route handler)
- * Note: In Hono, we handle the file buffer directly
+ * Save file using storage abstraction
  */
 export async function saveFileBuffer(
-  buffer: Buffer,
+  buffer: Uint8Array | ArrayBuffer,
   originalName: string,
   mimeType: string
 ): Promise<UploadResponse> {
-  const filename = generateFilename(originalName);
-  const filepath = join(UPLOAD_DIR, filename);
+  try {
+    const storage = getStorage();
+    const filename = generateFilename(originalName);
 
-  writeFileSync(filepath, buffer);
+    const size = buffer.byteLength;
+    console.log('[UploadService] Saving file:', filename, 'size:', size);
+    await storage.put(filename, buffer);
+    console.log('[UploadService] File saved successfully:', filename);
 
-  const contentType = detectContentType(mimeType, originalName);
+    // Note: contentType could be used for thumbnail generation in the future
+    void detectContentType(mimeType, originalName);
 
-  return {
-    url: `/uploads/${filename}`,
-    fileName: originalName,
-    fileSize: buffer.length,
-    // Thumbnail generation would require additional processing
-    // For now, we skip thumbnail generation
-    thumbnailUrl: contentType === 'video' ? undefined : undefined,
-  };
+    return {
+      url: `/uploads/${filename}`,
+      fileName: originalName,
+      fileSize: size,
+      thumbnailUrl: undefined,
+    };
+  } catch (error) {
+    console.error('[UploadService] Error saving file:', error);
+    throw error;
+  }
 }
 
 /**
  * Delete a file
  */
-export function deleteFile(filename: string): boolean {
-  const filepath = join(UPLOAD_DIR, filename);
-  if (existsSync(filepath)) {
-    unlinkSync(filepath);
-    return true;
-  }
-  return false;
+export async function deleteFile(filename: string): Promise<boolean> {
+  const storage = getStorage();
+  return storage.delete(filename);
 }
 
 /**
- * Get file path
+ * Check if file exists
  */
-export function getFilePath(filename: string): string {
-  return join(UPLOAD_DIR, filename);
+export async function fileExists(filename: string): Promise<boolean> {
+  const storage = getStorage();
+  return storage.exists(filename);
+}
+
+/**
+ * Get file data
+ */
+export async function getFileData(filename: string): Promise<Uint8Array | null> {
+  const storage = getStorage();
+  return storage.get(filename);
 }
 
 /**

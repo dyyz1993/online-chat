@@ -32,11 +32,13 @@ interface ChatState {
   sending: boolean;
   error: string | null;
   sseConnected: boolean;
+  usePolling: boolean; // Fallback for Workers environment
 
   // Actions
   initSession: () => Promise<void>;
   setVisitorName: (name: string) => void;
   loadMessages: (before?: number) => Promise<void>;
+  checkNewMessages: () => Promise<void>;
   sendMessage: (content: string, type: ContentType) => Promise<void>;
   uploadFile: (file: File) => Promise<void>;
   markAsRead: () => Promise<void>;
@@ -44,11 +46,17 @@ interface ChatState {
   updateSession: (sessionUpdate: Partial<Session>) => void;
   connectSSE: () => void;
   disconnectSSE: () => void;
+  startPolling: () => void;
+  stopPolling: () => void;
   clearError: () => void;
 }
 
 // EventSource reference
 let eventSource: EventSource | null = null;
+// Polling interval reference
+let pollingInterval: ReturnType<typeof setInterval> | null = null;
+// Track last message time for polling
+let lastMessageTime: number = 0;
 
 export const useChatStore = create<ChatState>((set, get) => ({
   // Initial state
@@ -59,6 +67,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   sending: false,
   error: null,
   sseConnected: false,
+  usePolling: false,
 
   // Initialize session from URL, localStorage or create new
   initSession: async () => {
@@ -90,7 +99,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         // Load initial messages
         get().loadMessages();
 
-        // Connect SSE
+        // Connect SSE (will fallback to polling if it fails)
         get().connectSSE();
       } else {
         set({ error: result.error || 'Failed to initialize session', loading: false });
@@ -130,6 +139,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (result.success) {
         // Prepend older messages
         const newMessages = result.data as Message[];
+        // Update last message time for polling
+        if (newMessages.length > 0) {
+          lastMessageTime = Math.max(lastMessageTime, newMessages[0].createdAt);
+        }
         set({
           messages: before ? [...newMessages, ...messages] : newMessages,
           hasMore: result.hasMore,
@@ -143,6 +156,36 @@ export const useChatStore = create<ChatState>((set, get) => ({
         error: error instanceof Error ? error.message : 'Unknown error',
         loading: false,
       });
+    }
+  },
+
+  // Check for new messages (used by polling)
+  checkNewMessages: async () => {
+    const { session, messages } = get();
+    if (!session) return;
+
+    try {
+      const params = new URLSearchParams({ sessionId: session.id, limit: '20' });
+      const response = await fetch(`/api/chat/messages?${params}`);
+      const result = await response.json();
+
+      if (result.success && result.data) {
+        const newMessages = result.data as Message[];
+        // Find messages newer than our last known message
+        const latestTime = messages.length > 0 ? messages[messages.length - 1].createdAt : 0;
+        const freshMessages = newMessages.filter((m) => m.createdAt > latestTime);
+
+        if (freshMessages.length > 0) {
+          // Add only new messages (avoid duplicates)
+          const existingIds = new Set(messages.map((m) => m.id));
+          const toAdd = freshMessages.filter((m) => !existingIds.has(m.id));
+          if (toAdd.length > 0) {
+            set({ messages: [...messages, ...toAdd] });
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Polling error:', error);
     }
   },
 
@@ -167,7 +210,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const result = await response.json();
 
       if (result.success && result.data) {
-        // Message will be added via SSE, but add immediately for better UX
+        // Message will be added via SSE/polling, but add immediately for better UX
         get().addMessage(result.data);
         set({ sending: false });
       } else {
@@ -231,11 +274,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
-  // Add message from SSE
+  // Add message from SSE or polling
   addMessage: (message: Message) => {
     const { messages, session } = get();
     // Avoid duplicates
     if (messages.some((m) => m.id === message.id)) return;
+
+    // Update last message time
+    lastMessageTime = Math.max(lastMessageTime, message.createdAt);
 
     set({
       messages: [...messages, message],
@@ -257,10 +303,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
-  // Connect to SSE
+  // Connect to SSE (with polling fallback)
   connectSSE: () => {
     const { session } = get();
     if (!session || eventSource) return;
+
+    // Always start polling as backup (Workers SSE may not broadcast correctly)
+    get().startPolling();
 
     eventSource = new EventSource(`/api/chat/sse/${session.id}`);
 
@@ -316,7 +365,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     eventSource.onerror = () => {
       set({ sseConnected: false });
-      // Auto-reconnect after 5 seconds
+      // Polling is already running as backup
+      // Auto-reconnect SSE after 30 seconds
       const currentEventSource = eventSource;
       setTimeout(() => {
         if (get().session && eventSource === currentEventSource) {
@@ -324,7 +374,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           eventSource = null;
           get().connectSSE();
         }
-      }, 5000);
+      }, 30000);
     };
   },
 
@@ -335,6 +385,28 @@ export const useChatStore = create<ChatState>((set, get) => ({
       eventSource = null;
     }
     set({ sseConnected: false });
+  },
+
+  // Start polling for new messages
+  startPolling: () => {
+    if (pollingInterval) return; // Already polling
+
+    set({ usePolling: true });
+    console.log('Starting message polling (SSE fallback)');
+
+    // Poll every 3 seconds
+    pollingInterval = setInterval(() => {
+      get().checkNewMessages();
+    }, 3000);
+  },
+
+  // Stop polling
+  stopPolling: () => {
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
+      pollingInterval = null;
+    }
+    set({ usePolling: false });
   },
 
   // Clear error

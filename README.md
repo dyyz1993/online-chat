@@ -1,49 +1,29 @@
 # 在线客服聊天系统
 
-一个功能完整的实时客服聊天系统，基于 React + Hono + SQLite 构建，支持 PC 端和移动端。
+一个功能完整的实时客服聊天系统，基于 React + Hono 构建，支持本地开发和 Cloudflare Workers 部署。
 
 ## 功能特性
 
-- **实时聊天** - 基于 SSE 的实时消息推送
-- **文件上传** - 支持图片、视频、文件上传与预览
+- **实时聊天** - 基于 SSE 的实时消息推送 + 轮询备用
+- **文件上传** - 支持图片、视频、文件上传与预览（R2 存储）
 - **任务进度** - 5阶段任务状态管理
 - **排队系统** - 用户排队查询，客服任务队列
 - **主题设置** - 会话主题设置与显示
 - **Bark通知** - iOS 推送通知集成
 - **响应式设计** - PC/移动端自适应
-
-## 界面预览
-
-### 用户端
-
-**PC 端聊天界面：**
-
-![用户端 - PC](./docs/screenshots/chat-pc-conversation.png)
-
-**移动端聊天界面：**
-
-![用户端 - 移动端](./docs/screenshots/chat-h5-conversation.png)
-
-### 客服端
-
-**PC 端工作台：**
-
-![客服端 - PC](./docs/screenshots/staff-pc-overview.png)
-
-**移动端工作台：**
-
-![客服端 - 移动端](./docs/screenshots/staff-h5-overview.png)
+- **Cloudflare Workers** - 支持边缘部署，全球加速
 
 ## 技术栈
 
 | 类别 | 技术 |
 |------|------|
 | 前端 | React 19, TypeScript, Vite |
-| 后端 | Hono, Node.js |
-| 数据库 | SQLite (node:sqlite) |
+| 后端 | Hono |
+| 数据库 | SQLite (本地) / D1 (Cloudflare) |
+| 存储 | 本地文件系统 / R2 (Cloudflare) |
 | 状态管理 | Zustand |
-| 实时通信 | Server-Sent Events |
-| 类型安全 | 全栈 TypeScript 类型共享 |
+| 实时通信 | SSE + 轮询备用 |
+| 部署 | Cloudflare Workers |
 
 ## 快速开始
 
@@ -53,7 +33,7 @@
 npm install
 ```
 
-### 开发
+### 本地开发
 
 ```bash
 npm run dev
@@ -75,6 +55,50 @@ npm run build
 ```bash
 npm test
 ```
+
+## Cloudflare Workers 部署
+
+### 前置要求
+
+1. Cloudflare 账号
+2. 安装 Wrangler CLI: `npm install -g wrangler`
+3. 登录: `wrangler login`
+
+### 创建资源
+
+1. **创建 D1 数据库**
+```bash
+wrangler d1 create online-chat-db
+```
+
+2. **创建 R2 存储桶**
+```bash
+wrangler r2 bucket create online-chat-uploads
+```
+
+3. **更新 wrangler.toml**
+将 D1 数据库 ID 填入 `wrangler.toml`
+
+### 配置环境变量
+
+```bash
+# 设置 Bark 密钥（敏感信息）
+wrangler secret put BARK_KEY
+```
+
+### 部署
+
+```bash
+npm run deploy
+```
+
+### GitHub Actions 自动部署
+
+1. 在 GitHub 仓库设置中添加 Secrets:
+   - `CLOUDFLARE_API_TOKEN` - Cloudflare API Token
+   - `BARK_KEY` - Bark 推送密钥
+
+2. 推送到 main 分支会自动触发部署
 
 ## 项目结构
 

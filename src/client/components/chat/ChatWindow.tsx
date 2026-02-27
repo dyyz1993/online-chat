@@ -2,7 +2,7 @@
  * Chat Window Component - Main chat interface
  */
 
-import type { Message, Session } from '@shared/types';
+import type { Message, Session, ContentType } from '@shared/types';
 import { MessageList } from './MessageList';
 import { MessageInput } from './MessageInput';
 import { TopicHeader } from './TopicHeader';
@@ -13,12 +13,13 @@ interface ChatWindowProps {
   loading: boolean;
   sending: boolean;
   onLoadMore: () => void;
-  onSend: (content: string, type: 'text' | 'image' | 'video') => void;
+  onSend: (content: string, type: ContentType) => void;
   onUpload: (file: File) => void;
   isOwn: (message: Message) => boolean;
   title?: string;
   visitorName?: string;
   sseConnected?: boolean;
+  usePolling?: boolean;
   session?: Session | null; // 新增：会话信息（用于显示主题和状态）
 }
 
@@ -34,6 +35,7 @@ export function ChatWindow({
   title = '在线客服',
   visitorName,
   sseConnected,
+  usePolling,
   session,
 }: ChatWindowProps) {
   const containerStyle: React.CSSProperties = {
@@ -66,7 +68,13 @@ export function ChatWindow({
     width: '8px',
     height: '8px',
     borderRadius: '50%',
-    backgroundColor: sseConnected ? '#52c41a' : '#ff4d4f',
+    backgroundColor: sseConnected ? '#52c41a' : usePolling ? '#faad14' : '#ff4d4f',
+  };
+
+  const getStatusText = () => {
+    if (sseConnected) return '已连接';
+    if (usePolling) return '轮询中';
+    return '连接中...';
   };
 
   return (
@@ -81,7 +89,7 @@ export function ChatWindow({
         </div>
         <div style={statusStyle}>
           <span style={dotStyle}></span>
-          <span>{sseConnected ? '已连接' : '连接中...'}</span>
+          <span>{getStatusText()}</span>
         </div>
       </div>
 

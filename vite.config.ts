@@ -28,7 +28,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       devServer({
-        entry: 'src/server/index.ts',
+        entry: 'src/server/index.node.ts',
         exclude: [
           // Paths that Vite should handle (not Hono)
           // Note: /uploads and /api/* will be handled by Hono

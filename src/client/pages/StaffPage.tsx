@@ -37,6 +37,7 @@ export function StaffPage() {
     messagesLoading,
     sending,
     sseConnected,
+    usePolling,
     totalUnread,
     error,
     inputMode,
@@ -182,12 +183,18 @@ export function StaffPage() {
     gap: '6px',
   };
 
-  const dotStyle = (connected: boolean): React.CSSProperties => ({
+  const dotStyle = (connected: boolean, polling?: boolean): React.CSSProperties => ({
     width: '8px',
     height: '8px',
     borderRadius: '50%',
-    backgroundColor: connected ? '#52c41a' : '#ff4d4f',
+    backgroundColor: connected ? '#52c41a' : polling ? '#faad14' : '#ff4d4f',
   });
+
+  const getStatusText = () => {
+    if (sseConnected) return '已连接';
+    if (usePolling) return '轮询中';
+    return '连接中...';
+  };
 
   const errorStyle: React.CSSProperties = {
     position: 'fixed',
@@ -263,9 +270,9 @@ export function StaffPage() {
             <span style={{ display: isMobile ? 'none' : 'inline' }}>队列</span>
           </button>
           <div style={statusItemStyle}>
-            <span style={dotStyle(sseConnected)}></span>
+            <span style={dotStyle(sseConnected, usePolling)}></span>
             <span style={{ display: isMobile ? 'none' : 'inline' }}>
-              {sseConnected ? '已连接' : '连接中...'}
+              {getStatusText()}
             </span>
           </div>
           {totalUnread > 0 && (

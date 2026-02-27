@@ -2,24 +2,36 @@
  * Bark Notification Service - Send push notifications to iOS
  */
 
-// 配置项 - 通过环境变量配置
-const BARK_KEY = process.env.BARK_KEY || '';
-const BARK_API = process.env.BARK_API || 'https://api.day.app';
-const STAFF_URL_BASE = process.env.STAFF_URL_BASE || 'http://localhost:3010/staff';
+// Configuration (can be initialized from Workers env)
+let _barkKey: string | null = null;
+let _barkApi: string = 'https://api.day.app';
+let _staffUrlBase: string = 'http://localhost:3010/staff';
 
-// 调试：打印配置
-console.log('[Bark] Config loaded:', {
-  hasKey: !!BARK_KEY,
-  keyLength: BARK_KEY?.length || 0,
-  api: BARK_API,
-  staffUrl: STAFF_URL_BASE,
-});
+/**
+ * Initialize Bark service with environment variables
+ * Call this from Workers context with c.env
+ */
+export function initBarkService(env: {
+  BARK_KEY?: string;
+  BARK_API?: string;
+  STAFF_URL_BASE?: string;
+}): void {
+  if (env.BARK_KEY) _barkKey = env.BARK_KEY;
+  if (env.BARK_API) _barkApi = env.BARK_API;
+  if (env.STAFF_URL_BASE) _staffUrlBase = env.STAFF_URL_BASE;
+}
 
 /**
  * Check if Bark is configured
  */
 export function isBarkConfigured(): boolean {
-  return !!BARK_KEY && BARK_KEY.length > 0;
+  // Check initialized config first, then fall back to process.env (Node.js)
+  if (_barkKey) return true;
+  if (typeof process !== 'undefined' && process.env?.BARK_KEY) {
+    _barkKey = process.env.BARK_KEY;
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -50,17 +62,29 @@ export async function sendBarkNotification(
 
     const encodedTitle = encodeURIComponent(title);
     const encodedBody = encodeURIComponent(body);
-    const barkUrl = `${BARK_API}/${BARK_KEY}/${encodedTitle}/${encodedBody}?${params.toString()}`;
+    const barkUrl = `${_barkApi}/${_barkKey}/${encodedTitle}/${encodedBody}?${params.toString()}`;
 
-    // 使用 fetch 发送通知（不阻塞主流程）
-    fetch(barkUrl).catch((err) => {
-      console.error('[Bark] Notification failed:', err.message);
+    console.log('[Bark] Sending to:', `${_barkApi}/${_barkKey?.substring(0, 4)}***...`);
+
+    // 使用 fetch 发送通知
+    const response = await fetch(barkUrl, {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Cloudflare-Workers-Chat/1.0',
+      },
     });
 
-    console.log('[Bark] Notification sent:', title);
+    const result = await response.text();
+    console.log('[Bark] API Response:', response.status, result);
+
+    if (response.ok) {
+      console.log('[Bark] Notification sent successfully:', title);
+    } else {
+      console.error('[Bark] API error:', response.status, result);
+    }
   } catch (error) {
     // 不要让通知失败影响主流程
-    console.error('[Bark] Error:', error);
+    console.error('[Bark] Fetch error:', error instanceof Error ? error.message : error);
   }
 }
 
@@ -73,8 +97,11 @@ export async function notifyVisitorMessage(
   content: string,
   contentType: string
 ): Promise<void> {
+  console.log('[Bark] notifyVisitorMessage called, barkKey configured:', !!_barkKey);
+
   // 如果没有配置 Bark Key，跳过通知
   if (!isBarkConfigured()) {
+    console.log('[Bark] Skipped - BARK_KEY not configured');
     return;
   }
 
@@ -91,7 +118,7 @@ export async function notifyVisitorMessage(
   }
 
   // 客服端链接 - 使用环境变量配置的地址
-  const staffUrl = `${STAFF_URL_BASE}?s=${sessionId}`;
+  const staffUrl = `${_staffUrlBase}?s=${sessionId}`;
 
   await sendBarkNotification(
     `💬 ${visitorName}`,

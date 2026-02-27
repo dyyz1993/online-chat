@@ -27,12 +27,14 @@ interface StaffState {
   sending: boolean;
   error: string | null;
   sseConnected: boolean;
+  usePolling: boolean; // Fallback for Workers environment
   inputMode: InputMode; // 新增：输入模式
 
   // Actions
   loadSessions: () => Promise<void>;
   selectSession: (sessionId: string) => Promise<void>;
   loadMoreMessages: () => Promise<void>;
+  checkNewMessages: () => Promise<void>;
   sendMessage: (content: string, type: ContentType) => Promise<void>;
   uploadFile: (file: File) => Promise<void>;
   markAsRead: (sessionId: string) => Promise<void>;
@@ -41,6 +43,8 @@ interface StaffState {
   initFromUrl: () => Promise<void>;
   connectSSE: () => void;
   disconnectSSE: () => void;
+  startPolling: () => void;
+  stopPolling: () => void;
   clearError: () => void;
   // 新增：主题和状态管理
   setInputMode: (mode: InputMode) => void;
@@ -50,6 +54,8 @@ interface StaffState {
 
 // EventSource reference
 let eventSource: EventSource | null = null;
+// Polling interval reference
+let pollingInterval: ReturnType<typeof setInterval> | null = null;
 
 export const useStaffStore = create<StaffState>((set, get) => ({
   // Initial state
@@ -63,6 +69,7 @@ export const useStaffStore = create<StaffState>((set, get) => ({
   sending: false,
   error: null,
   sseConnected: false,
+  usePolling: false,
   inputMode: 'chat', // 新增：默认聊天模式
 
   // Load sessions list
@@ -166,6 +173,45 @@ export const useStaffStore = create<StaffState>((set, get) => ({
         error: error instanceof Error ? error.message : 'Unknown error',
         messagesLoading: false,
       });
+    }
+  },
+
+  // Check for new messages (used by polling)
+  checkNewMessages: async () => {
+    const { sessions, currentSessionId, messages } = get();
+
+    try {
+      // Refresh sessions list
+      const response = await fetch('/api/staff/sessions?status=active');
+      const result = await response.json();
+
+      if (result.success) {
+        const newSessions = result.data as SessionWithPreview[];
+        const totalUnread = newSessions.reduce((sum, s) => sum + s.unreadByStaff, 0);
+        set({ sessions: newSessions, totalUnread });
+      }
+
+      // If we have a selected session, check for new messages
+      if (currentSessionId) {
+        const params = new URLSearchParams({ sessionId: currentSessionId, limit: '20' });
+        const msgResponse = await fetch(`/api/staff/messages?${params}`);
+        const msgResult = await msgResponse.json();
+
+        if (msgResult.success && msgResult.data) {
+          const newMsgs = msgResult.data as Message[];
+          const currentMsgs = messages.get(currentSessionId) || [];
+          const existingIds = new Set(currentMsgs.map((m) => m.id));
+          const toAdd = newMsgs.filter((m) => !existingIds.has(m.id));
+
+          if (toAdd.length > 0) {
+            const newMessages = new Map(messages);
+            newMessages.set(currentSessionId, [...currentMsgs, ...toAdd]);
+            set({ messages: newMessages });
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Polling error:', error);
     }
   },
 
@@ -274,7 +320,7 @@ export const useStaffStore = create<StaffState>((set, get) => ({
     }
   },
 
-  // Add message from SSE
+  // Add message from SSE or polling
   addMessage: (message: Message) => {
     const { messages, sessions } = get();
     const sessionId = message.sessionId;
@@ -336,9 +382,12 @@ export const useStaffStore = create<StaffState>((set, get) => ({
     }
   },
 
-  // Connect to SSE
+  // Connect to SSE (with polling fallback)
   connectSSE: () => {
     if (eventSource) return;
+
+    // Always start polling as backup (Workers SSE may not broadcast correctly)
+    get().startPolling();
 
     eventSource = new EventSource('/api/staff/sse');
 
@@ -393,7 +442,8 @@ export const useStaffStore = create<StaffState>((set, get) => ({
 
     eventSource.onerror = () => {
       set({ sseConnected: false });
-      // Auto-reconnect after 5 seconds
+      // Polling is already running as backup
+      // Auto-reconnect SSE after 30 seconds
       const currentEventSource = eventSource;
       setTimeout(() => {
         if (eventSource === currentEventSource) {
@@ -401,7 +451,7 @@ export const useStaffStore = create<StaffState>((set, get) => ({
           eventSource = null;
           get().connectSSE();
         }
-      }, 5000);
+      }, 30000);
     };
   },
 
@@ -412,6 +462,28 @@ export const useStaffStore = create<StaffState>((set, get) => ({
       eventSource = null;
     }
     set({ sseConnected: false });
+  },
+
+  // Start polling for new messages
+  startPolling: () => {
+    if (pollingInterval) return; // Already polling
+
+    set({ usePolling: true });
+    console.log('Starting message polling (SSE fallback)');
+
+    // Poll every 3 seconds
+    pollingInterval = setInterval(() => {
+      get().checkNewMessages();
+    }, 3000);
+  },
+
+  // Stop polling
+  stopPolling: () => {
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
+      pollingInterval = null;
+    }
+    set({ usePolling: false });
   },
 
   // Clear error

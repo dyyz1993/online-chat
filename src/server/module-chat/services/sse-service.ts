@@ -228,7 +228,10 @@ export function getConnectionStats(): {
   };
 }
 
-// Start heartbeat interval (every 30 seconds)
-setInterval(() => {
-  sendHeartbeat().catch(console.error);
-}, 30000);
+// Start heartbeat interval (every 30 seconds) - only in Node.js environment
+// Cloudflare Workers doesn't support global setInterval
+if (typeof process !== 'undefined' && process.versions?.node) {
+  setInterval(() => {
+    sendHeartbeat().catch(console.error);
+  }, 30000);
+}

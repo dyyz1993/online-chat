@@ -3,6 +3,7 @@
  */
 
 import { useEffect } from 'react';
+import type { ContentType } from '@shared/types';
 import { useChatStore } from '@client/stores/chatStore';
 import { ChatWindow } from '@client/components/chat/ChatWindow';
 import { PWAInstallPrompt } from '@client/components/chat/PWAInstallPrompt';
@@ -15,6 +16,7 @@ export function ChatPage() {
     loading,
     sending,
     sseConnected,
+    usePolling,
     error,
     initSession,
     loadMessages,
@@ -41,7 +43,7 @@ export function ChatPage() {
     return () => window.removeEventListener('focus', handleFocus);
   }, [session, markAsRead]);
 
-  const handleSend = (content: string, type: 'text' | 'image' | 'video') => {
+  const handleSend = (content: string, type: ContentType) => {
     sendMessage(content, type);
   };
 
@@ -132,6 +134,7 @@ export function ChatPage() {
         title={`在线客服`}
         visitorName={session?.visitorName}
         sseConnected={sseConnected}
+        usePolling={usePolling}
         session={session}
       />
 

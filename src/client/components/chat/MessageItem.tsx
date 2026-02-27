@@ -49,7 +49,7 @@ export function MessageItem({ message, isOwn }: MessageItemProps) {
     gap: '6px',
   };
 
-  const toggleMedia = useCallback((messageId: string) => {
+  const toggleMedia = useCallback((messageId: number) => {
     setExpandedMedia((prev) => ({
       ...prev,
       [messageId]: !prev[messageId],

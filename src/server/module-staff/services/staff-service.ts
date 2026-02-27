@@ -12,19 +12,31 @@ export {
 } from '@server/module-chat/services/chat-service';
 
 import { getSession as getSessionBase, listSessions as listSessionsBase } from '@server/module-chat/services/chat-service';
+import { getDb } from '@server/shared/db';
 import type { Session, SessionStatus, TaskStatus } from '@shared/types';
+
+interface MessagePreviewRow {
+  session_id: string;
+  content: string;
+  content_type: string;
+  created_at: number;
+}
+
+interface UnreadCountRow {
+  total: number | null;
+}
 
 /**
  * Update session topic
  */
 export async function updateSessionTopic(sessionId: string, topic: string): Promise<Session | null> {
-  const { sqlite } = await import('@server/shared/db');
+  const db = getDb();
   const now = Date.now();
 
-  const stmt = sqlite.prepare(`
-    UPDATE sessions SET topic = ?, updated_at = ? WHERE id = ?
-  `);
-  stmt.run(topic, now, sessionId);
+  await db.run(
+    'UPDATE sessions SET topic = ?, updated_at = ? WHERE id = ?',
+    [topic, now, sessionId]
+  );
 
   return getSessionBase(sessionId);
 }
@@ -33,13 +45,13 @@ export async function updateSessionTopic(sessionId: string, topic: string): Prom
  * Update session task status
  */
 export async function updateTaskStatus(sessionId: string, taskStatus: TaskStatus): Promise<Session | null> {
-  const { sqlite } = await import('@server/shared/db');
+  const db = getDb();
   const now = Date.now();
 
-  const stmt = sqlite.prepare(`
-    UPDATE sessions SET task_status = ?, task_status_updated_at = ?, updated_at = ? WHERE id = ?
-  `);
-  stmt.run(taskStatus, now, now, sessionId);
+  await db.run(
+    'UPDATE sessions SET task_status = ?, task_status_updated_at = ?, updated_at = ? WHERE id = ?',
+    [taskStatus, now, now, sessionId]
+  );
 
   return getSessionBase(sessionId);
 }
@@ -61,15 +73,15 @@ export async function getSessionWithPreview(sessionId: string): Promise<{
   }
 
   // Get last message
-  const { sqlite } = await import('@server/shared/db');
-  const stmt = sqlite.prepare(`
-    SELECT content, content_type, created_at
-    FROM messages
-    WHERE session_id = ?
-    ORDER BY created_at DESC
-    LIMIT 1
-  `);
-  const row = stmt.get(sessionId) as any;
+  const db = getDb();
+  const row = await db.get<MessagePreviewRow>(
+    `SELECT session_id, content, content_type, created_at
+     FROM messages
+     WHERE session_id = ?
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [sessionId]
+  );
 
   if (row) {
     return {
@@ -104,20 +116,19 @@ export async function listSessionsWithPreview(status?: SessionStatus): Promise<
   }
 
   // Get last messages for all sessions
-  const { sqlite } = await import('@server/shared/db');
+  const db = getDb();
   const sessionIds = sessions.map((s) => s.id);
   const placeholders = sessionIds.map(() => '?').join(',');
 
-  const stmt = sqlite.prepare(`
-    SELECT session_id, content, content_type, created_at
-    FROM messages
-    WHERE session_id IN (${placeholders})
-    AND id IN (
-      SELECT MAX(id) FROM messages WHERE session_id IN (${placeholders}) GROUP BY session_id
-    )
-  `);
-
-  const rows = stmt.all(...sessionIds, ...sessionIds) as any[];
+  const rows = await db.all<MessagePreviewRow>(
+    `SELECT session_id, content, content_type, created_at
+     FROM messages
+     WHERE session_id IN (${placeholders})
+     AND id IN (
+       SELECT MAX(id) FROM messages WHERE session_id IN (${placeholders}) GROUP BY session_id
+     )`,
+    [...sessionIds, ...sessionIds]
+  );
 
   const lastMessages = new Map<
     string,
@@ -142,10 +153,9 @@ export async function listSessionsWithPreview(status?: SessionStatus): Promise<
  * Get total unread count across all sessions
  */
 export async function getTotalUnreadCount(): Promise<number> {
-  const { sqlite } = await import('@server/shared/db');
-  const stmt = sqlite.prepare(`
-    SELECT SUM(unread_by_staff) as total FROM sessions WHERE status = 'active'
-  `);
-  const row = stmt.get() as any;
+  const db = getDb();
+  const row = await db.get<UnreadCountRow>(
+    "SELECT SUM(unread_by_staff) as total FROM sessions WHERE status = 'active'"
+  );
   return row?.total || 0;
 }

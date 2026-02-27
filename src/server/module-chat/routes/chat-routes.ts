@@ -82,7 +82,8 @@ chatRoutes.post('/messages', async (c) => {
     // 发送 Bark 通知（获取会话信息用于显示访客名）
     const session = await chatService.getSession(sessionId);
     if (session) {
-      barkService.notifyVisitorMessage(
+      console.log('[ChatRoutes] Calling barkService.notifyVisitorMessage for session:', sessionId);
+      await barkService.notifyVisitorMessage(
         sessionId,
         session.visitorName,
         content,
@@ -107,6 +108,8 @@ chatRoutes.post('/upload', async (c) => {
     const file = formData.get('file') as File;
     const sessionId = formData.get('sessionId') as string;
 
+    console.log('[Upload] Received request:', { file: file?.name, type: file?.type, size: file?.size, sessionId });
+
     if (!file || !sessionId) {
       return c.json({ success: false, error: 'File and sessionId are required' }, 400);
     }
@@ -118,15 +121,23 @@ chatRoutes.post('/upload', async (c) => {
       name: file.name,
     });
 
+    console.log('[Upload] Validation result:', JSON.stringify(validation));
+
     if (!validation.valid) {
       return c.json({ success: false, error: validation.error }, 400);
     }
 
     const contentType = validation.detectedType!;
 
-    // Save file
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const uploadResult = await uploadService.saveFileBuffer(buffer, file.name, file.type);
+    // Save file - use Uint8Array instead of Buffer for Workers compatibility
+    console.log('[Upload] Creating array buffer...');
+    const arrayBuffer = await file.arrayBuffer();
+    const uint8Array = new Uint8Array(arrayBuffer);
+    console.log('[Upload] Buffer created, size:', uint8Array.byteLength);
+
+    console.log('[Upload] Calling saveFileBuffer...');
+    const uploadResult = await uploadService.saveFileBuffer(uint8Array, file.name, file.type);
+    console.log('[Upload] Upload result:', JSON.stringify(uploadResult));
 
     // Create message
     const message = await chatService.sendMessage({
@@ -156,7 +167,8 @@ chatRoutes.post('/upload', async (c) => {
     return c.json({ success: true, data: message });
   } catch (error) {
     console.error('Upload error:', error);
-    return c.json({ success: false, error: 'Failed to upload file' }, 500);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to upload file';
+    return c.json({ success: false, error: errorMessage }, 500);
   }
 });
 
