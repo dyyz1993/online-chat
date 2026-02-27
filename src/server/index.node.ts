@@ -36,10 +36,45 @@ const app = new Hono();
 app.get('/uploads/:filename', (c) => {
   const filename = c.req.param('filename');
   const filepath = join(uploadDir, filename);
+
+  // Security: prevent directory traversal
+  if (filename.includes('..') || filename.includes('/')) {
+    return c.json({ error: 'Invalid filename' }, 400);
+  }
+
   if (!existsSync(filepath)) {
     return c.json({ error: 'File not found' }, 404);
   }
-  return serveStatic({ root: uploadDir })(c, async () => c.json({ error: 'File not found' }, 404));
+
+  const fileBuffer = readFileSync(filepath);
+  const ext = filename.split('.').pop()?.toLowerCase() || '';
+
+  // MIME types
+  const mimeTypes: Record<string, string> = {
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    gif: 'image/gif',
+    webp: 'image/webp',
+    mp4: 'video/mp4',
+    webm: 'video/webm',
+    pdf: 'application/pdf',
+    xls: 'application/vnd.ms-excel',
+    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    doc: 'application/msword',
+    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    csv: 'text/csv',
+    zip: 'application/zip',
+  };
+
+  const contentType = mimeTypes[ext] || 'application/octet-stream';
+
+  return new Response(fileBuffer, {
+    headers: {
+      'Content-Type': contentType,
+      'Cache-Control': 'public, max-age=31536000',
+    },
+  });
 });
 
 // Global middleware
